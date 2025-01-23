@@ -53,12 +53,43 @@ class KafkaInstaller:
     def get_available_versions(self) -> List[str]:
         """获取可用的 Kafka 版本"""
         try:
-            response = requests.get("https://downloads.apache.org/kafka/")
-            versions = re.findall(r'href="(\d+\.\d+\.\d+)/"', response.text)
-            return sorted(versions, key=lambda v: [int(x) for x in v.split('.')])[-10:]
+            # 使用 Apache Archive 镜像站点
+            mirrors = [
+                "https://archive.apache.org/dist/kafka/",
+                "https://downloads.apache.org/kafka/"
+            ]
+            
+            versions = []
+            for mirror in mirrors:
+                try:
+                    response = requests.get(mirror, timeout=10)
+                    response.raise_for_status()
+                    # 使用更精确的正则表达式匹配版本号
+                    found_versions = re.findall(r'>(\d+\.\d+\.\d+)/</a>', response.text)
+                    if found_versions:
+                        versions.extend(found_versions)
+                        break  # 如果找到版本号就跳出循环
+                except requests.RequestException:
+                    continue
+            
+            if not versions:
+                # 如果无法获取在线版本，使用预设的最新稳定版本
+                default_versions = [
+                    "3.7.0", "3.6.1", "3.5.2", "3.4.1", "3.3.2",
+                    "3.2.3", "3.1.2", "3.0.2", "2.8.2", "2.7.2"
+                ]
+                print_warning("无法从在线获取版本列表，使用预设版本列表")
+                return default_versions
+            
+            # 版本号排序
+            versions = sorted(set(versions), key=lambda v: [int(x) for x in v.split('.')])
+            # 返回最新的10个版本
+            return versions[-10:]
+            
         except Exception as e:
             print_error(f"获取 Kafka 版本列表失败: {e}")
-            sys.exit(1)
+            print_warning("使用默认最新稳定版本: 3.7.0")
+            return ["3.7.0"]
 
     def select_version(self) -> None:
         """选择 Kafka 版本"""

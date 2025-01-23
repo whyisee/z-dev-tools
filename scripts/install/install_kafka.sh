@@ -17,27 +17,28 @@ print_warning() {
 get_kafka_versions() {
     print_info "获取 Kafka 可用版本列表..."
     
-    # 使用 curl 获取 Apache Kafka 下载页面
+    # 修改版本获取逻辑，确保只获取版本号
     local versions=$(curl -s https://downloads.apache.org/kafka/ | \
                     grep -o 'href="[0-9]\.[0-9]\.[0-9]/"' | \
                     grep -o '[0-9]\.[0-9]\.[0-9]' | \
-                    sort -V | \
-                    tail -n 10)
+                    sort -V)
     
     if [ -z "$versions" ]; then
         print_error "无法获取 Kafka 版本列表"
         exit 1
     fi
     
+    # 直接返回版本号，不包含其他输出
     echo "$versions"
 }
 
 # 选择 Kafka 版本
 select_kafka_version() {
-    local versions=($(get_kafka_versions))
+    # 将版本信息存储到数组中，使用换行符作为分隔符
+    mapfile -t versions < <(get_kafka_versions)
     local latest_version=${versions[-1]}
     
-    echo "可用的 Kafka 版本:"
+    print_info "可用的 Kafka 版本:"
     local i=1
     for version in "${versions[@]}"; do
         echo "$i) $version"
