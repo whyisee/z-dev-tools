@@ -1,10 +1,11 @@
 #!/bin/bash
 
-# 创建主目录结构
-mkdir -p devops-tools/{scripts,docs,config}
-mkdir -p devops-tools/scripts/{installation,monitoring,maintenance}
-mkdir -p devops-tools/config/{env,templates}
+# 创建主要目录
+mkdir -p scripts/{install,monitor,utils}
+mkdir -p docs
+mkdir -p config
+mkdir -p logs
 
-# 创建 README 文件
-touch devops-tools/README.md
-touch devops-tools/requirements.txt 
+# 创建基本文件
+touch README.md
+touch .gitignore
