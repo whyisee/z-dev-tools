@@ -27,7 +27,7 @@ get_kafka_versions() {
     if [ -z "$versions" ]; then
         print_error "无法获取 Kafka 版本列表"
         exit 1
-    }
+    fi
     
     echo "$versions"
 }
