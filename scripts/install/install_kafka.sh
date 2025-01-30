@@ -195,7 +195,25 @@ install_kafka() {
 configure_standalone() {
     print_info "配置 Kafka 单机模式..."
     
-    # 修改配置文件
+    # 配置 ZooKeeper
+    print_info "配置内置 ZooKeeper..."
+    cat > ${KAFKA_HOME}/config/zookeeper.properties << EOF
+# ZooKeeper 基本配置
+dataDir=/data/zookeeper
+clientPort=2181
+maxClientCnxns=0
+admin.enableServer=false
+
+# 自动清理配置
+autopurge.snapRetainCount=3
+autopurge.purgeInterval=1
+EOF
+
+    # 创建 ZooKeeper 数据目录
+    mkdir -p /data/zookeeper
+    chown -R kafka:kafka /data/zookeeper
+    
+    # 修改 Kafka 配置文件
     cat > ${KAFKA_CONFIG} << EOF
 # Broker 基本配置
 broker.id=0
@@ -481,12 +499,26 @@ start_kafka() {
     # 确保目录权限正确
     chown -R kafka:kafka ${KAFKA_HOME} ${KAFKA_DATA} ${KAFKA_LOGS}
     
+    if [ "$deploy_mode" = "1" ]; then
+        # 单机模式：先启动内置 ZooKeeper
+        print_info "启动内置 ZooKeeper..."
+        ${KAFKA_HOME}/bin/zookeeper-server-start.sh -daemon ${KAFKA_HOME}/config/zookeeper.properties
+        sleep 5
+        
+        # 检查 ZooKeeper 是否启动成功
+        if ! pgrep -f "org.apache.zookeeper.server.quorum.QuorumPeerMain" >/dev/null; then
+            print_error "ZooKeeper 启动失败"
+            exit 1
+        fi
+        print_info "ZooKeeper 启动成功"
+    fi
+    
     # 设置环境变量
     export JAVA_HOME=$JAVA_HOME
     export KAFKA_HOME=${KAFKA_HOME}
     export LOG_DIR=${KAFKA_LOGS}
     
-    # 直接启动 Kafka
+    print_info "启动 Kafka Broker..."
     ${KAFKA_HOME}/bin/kafka-server-start.sh -daemon ${KAFKA_CONFIG}
     
     # 检查启动状态
@@ -545,9 +577,17 @@ main() {
     create_systemd_service
     
     print_info "Kafka 安装完成！"
-    print_info "使用以下命令管理 Kafka："
-    print_info "启动：${KAFKA_HOME}/bin/kafka-server-start.sh -daemon ${KAFKA_CONFIG}"
-    print_info "停止：${KAFKA_HOME}/bin/kafka-server-stop.sh"
+    if [ "$deploy_mode" = "1" ]; then
+        print_info "使用以下命令管理 Kafka（单机模式）："
+        print_info "启动 ZooKeeper：${KAFKA_HOME}/bin/zookeeper-server-start.sh -daemon ${KAFKA_HOME}/config/zookeeper.properties"
+        print_info "启动 Kafka：${KAFKA_HOME}/bin/kafka-server-start.sh -daemon ${KAFKA_CONFIG}"
+        print_info "停止 Kafka：${KAFKA_HOME}/bin/kafka-server-stop.sh"
+        print_info "停止 ZooKeeper：${KAFKA_HOME}/bin/zookeeper-server-stop.sh"
+    else
+        print_info "使用以下命令管理 Kafka（集群模式）："
+        print_info "启动：${KAFKA_HOME}/bin/kafka-server-start.sh -daemon ${KAFKA_CONFIG}"
+        print_info "停止：${KAFKA_HOME}/bin/kafka-server-stop.sh"
+    fi
     print_info "查看日志：tail -f ${KAFKA_LOGS}/server.log"
     
     # 询问是否立即启动服务
