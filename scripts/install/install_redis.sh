@@ -31,13 +31,81 @@ check_os() {
     fi
 }
 
+# 安装和配置 GCC
+install_gcc() {
+    print_info "安装和配置 GCC..."
+    
+    if [ "$OS_TYPE" = "rhel" ]; then
+        if [ "$OS_VERSION" = "7" ]; then
+            # 配置 CentOS 7 的 SCL 仓库
+            cat > /etc/yum.repos.d/CentOS-SCLo-scl.repo << 'EOF'
+[centos-sclo-sclo]
+name=CentOS-7 - SCLo sclo
+baseurl=http://vault.centos.org/centos/7/sclo/$basearch/sclo/
+gpgcheck=1
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo
+
+[centos-sclo-rh]
+name=CentOS-7 - SCLo rh
+baseurl=http://vault.centos.org/centos/7/sclo/$basearch/rh/
+gpgcheck=1
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo
+EOF
+
+            # 清理并更新缓存
+            yum clean all && yum makecache fast
+            
+            # 安装 devtoolset
+            yum -y install centos-release-scl-rh
+            yum -y install devtoolset-7-gcc devtoolset-7-gcc-c++ devtoolset-7-binutils
+            
+            # 启用 devtoolset-7
+            cat > /etc/profile.d/gcc.sh << 'EOF'
+source /opt/rh/devtoolset-7/enable
+EOF
+            source /etc/profile.d/gcc.sh
+            
+            # 创建软链接
+            ln -sf /opt/rh/devtoolset-7/root/usr/bin/gcc /usr/bin/gcc
+            ln -sf /opt/rh/devtoolset-7/root/usr/bin/g++ /usr/bin/g++
+            ln -sf /opt/rh/devtoolset-7/root/usr/bin/gcc /usr/bin/cc
+            
+        elif [ "$OS_VERSION" -ge 8 ]; then
+            # CentOS 8+ 直接安装 gcc
+            dnf -y install gcc gcc-c++
+        fi
+    elif [ "$OS_TYPE" = "debian" ]; then
+        # Debian/Ubuntu 系统
+        apt-get update
+        apt-get -y install gcc g++ build-essential
+    fi
+    
+    # 验证 GCC 安装
+    if ! command -v gcc &>/dev/null; then
+        print_error "GCC 安装失败"
+        exit 1
+    fi
+    
+    # 显示 GCC 版本
+    print_info "已安装的 GCC 版本："
+    gcc --version | head -n1
+    
+    # 验证 cc 链接
+    if ! command -v cc &>/dev/null; then
+        print_error "cc 命令不可用"
+        exit 1
+    fi
+}
+
 # 检查基础工具
 check_base_tools() {
     print_info "检查基础工具..."
     
     # 根据操作系统类型安装编译工具
     if [ "$OS_TYPE" = "rhel" ]; then
-        print_info "安装编译工具..."
+        print_info "安装基础工具..."
         
         # 检查是否为 CentOS 7
         if [ "$OS_VERSION" = "7" ]; then
@@ -67,57 +135,25 @@ EOF
             
             # 清理并更新缓存
             yum clean all && yum makecache fast
-            
-            # 直接安装开发工具，不使用 SCL
-            yum -y groupinstall "Development Tools"
-            yum -y install wget curl tar gcc gcc-c++ make tcl
-            
-        # 检查是否为 CentOS 8 或更高版本
-        elif [ -f /etc/centos-release ] && [ "$OS_VERSION" -ge 8 ]; then
-            # 配置 CentOS 8+ 仓库
-            sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
-            sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
-            
-            # 对于 CentOS Stream，可能需要不同的配置
-            if [ "$OS_VERSION" = "stream" ]; then
-                dnf -y install 'dnf-command(config-manager)'
-                dnf config-manager --set-enabled powertools
-            else
-                dnf -y install epel-release
-                dnf config-manager --set-enabled PowerTools
-            fi
         fi
         
+        # 安装基本工具
+        yum -y install wget curl tar make tcl
+        
     elif [ "$OS_TYPE" = "debian" ]; then
-        print_info "安装编译工具..."
+        print_info "安装基础工具..."
         apt-get update
-        apt-get -y install build-essential
-        apt-get -y install wget curl tar gcc g++ make tcl
+        apt-get -y install wget curl tar make tcl
     fi
     
-    # 验证工具是否安装成功
-    local tools_to_check="wget curl tar gcc make"
+    # 验证基础工具是否安装成功
+    local tools_to_check="wget curl tar make"
     for tool in $tools_to_check; do
         if ! command -v $tool &>/dev/null; then
             print_error "工具 $tool 安装失败"
             exit 1
         fi
     done
-    
-    # 检查 cc 是否可用
-    if ! command -v cc &>/dev/null; then
-        print_warning "cc 命令不可用，尝试创建链接..."
-        if [ -f /usr/bin/gcc ]; then
-            ln -sf /usr/bin/gcc /usr/bin/cc
-        else
-            print_error "找不到 gcc，无法创建 cc 链接"
-            exit 1
-        fi
-    fi
-    
-    # 显示编译器版本
-    print_info "GCC 版本信息："
-    gcc --version | head -n1
     
     print_info "基础工具检查完成"
 }
@@ -357,6 +393,7 @@ main() {
     
     check_os
     check_base_tools
+    install_gcc
     check_existing_redis
     select_redis_version
     install_redis
