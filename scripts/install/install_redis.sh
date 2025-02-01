@@ -38,14 +38,37 @@ check_base_tools() {
     # 根据操作系统类型安装编译工具
     if [ "$OS_TYPE" = "rhel" ]; then
         print_info "安装编译工具..."
+        
+        # 检查是否为 CentOS 8 或更高版本
+        if [ -f /etc/centos-release ] && [ "$OS_VERSION" -ge 8 ]; then
+            # 配置 CentOS 8+ 仓库
+            sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
+            sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+            
+            # 对于 CentOS Stream，可能需要不同的配置
+            if [ "$OS_VERSION" = "stream" ]; then
+                dnf -y install 'dnf-command(config-manager)'
+                dnf config-manager --set-enabled powertools
+            else
+                dnf -y install epel-release
+                dnf config-manager --set-enabled PowerTools
+            fi
+        else
+            # CentOS 7 或其他 RHEL 系统
+            yum -y install epel-release
+        fi
+        
+        # 清理并更新缓存
         yum clean all
-        yum -y install epel-release
+        yum makecache
+        
+        # 安装开发工具
         yum -y groupinstall "Development Tools"
         yum -y install wget curl tar gcc gcc-c++ make tcl
         
         # 确认 gcc 安装和链接
-        if ! alternatives --display gcc &>/dev/null; then
-            alternatives --install /usr/bin/cc cc /usr/bin/gcc 100
+        if [ ! -f /usr/bin/cc ]; then
+            ln -s /usr/bin/gcc /usr/bin/cc
         fi
     elif [ "$OS_TYPE" = "debian" ]; then
         print_info "安装编译工具..."
@@ -60,13 +83,19 @@ check_base_tools() {
     fi
     
     # 验证工具是否安装成功
-    local tools_to_check="wget curl tar gcc cc make"
+    local tools_to_check="wget curl tar gcc make"
     for tool in $tools_to_check; do
         if ! command -v $tool &>/dev/null; then
             print_error "工具 $tool 安装失败"
             exit 1
         fi
     done
+    
+    # 确保 cc 可用
+    if [ ! -f /usr/bin/cc ]; then
+        print_warning "创建 cc 链接..."
+        ln -s /usr/bin/gcc /usr/bin/cc
+    fi
     
     # 显示 gcc 版本
     gcc --version
