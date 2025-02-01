@@ -31,37 +31,54 @@ check_os() {
     fi
 }
 
+# 配置 CentOS 7 仓库
+configure_centos7_repo() {
+    print_info "配置 CentOS 7 仓库..."
+    
+    # 备份原有仓库文件
+    mkdir -p /etc/yum.repos.d/backup
+    mv /etc/yum.repos.d/*.repo /etc/yum.repos.d/backup/ 2>/dev/null || true
+    
+    # 配置基础仓库
+    cat > /etc/yum.repos.d/CentOS-Base.repo << 'EOF'
+[base]
+name=CentOS-7 - Base
+baseurl=https://mirrors.aliyun.com/centos/7/os/$basearch/
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-7
+
+[updates]
+name=CentOS-7 - Updates
+baseurl=https://mirrors.aliyun.com/centos/7/updates/$basearch/
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-7
+
+[extras]
+name=CentOS-7 - Extras
+baseurl=https://mirrors.aliyun.com/centos/7/extras/$basearch/
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-7
+
+[epel]
+name=Extra Packages for Enterprise Linux 7 - $basearch
+baseurl=https://mirrors.aliyun.com/epel/7/$basearch
+enabled=1
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/epel/RPM-GPG-KEY-EPEL-7
+EOF
+    
+    # 清理并更新缓存
+    yum clean all
+    yum makecache
+}
+
 # 安装和配置 GCC
 install_gcc() {
     print_info "安装和配置 GCC..."
     
     if [ "$OS_TYPE" = "rhel" ]; then
         if [ "$OS_VERSION" = "7" ]; then
-            # 配置 CentOS 7 的备用源
-            cat > /etc/yum.repos.d/CentOS-Base.repo << 'EOF'
-[base]
-name=CentOS-$releasever - Base
-baseurl=http://vault.centos.org/centos/$releasever/os/$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
-
-[updates]
-name=CentOS-$releasever - Updates
-baseurl=http://vault.centos.org/centos/$releasever/updates/$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
-
-[extras]
-name=CentOS-$releasever - Extras
-baseurl=http://vault.centos.org/centos/$releasever/extras/$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
-EOF
-            
-            # 清理并更新缓存
-            yum clean all && yum makecache fast
-            
-            # 安装开发工具组
+            # 使用已配置的仓库
             yum -y groupinstall "Development Tools"
             
         elif [ "$OS_VERSION" -ge 8 ]; then
@@ -105,32 +122,7 @@ check_base_tools() {
         
         # 检查是否为 CentOS 7
         if [ "$OS_VERSION" = "7" ]; then
-            # 配置 CentOS 7 仓库
-            yum -y install epel-release
-            
-            # 配置备用源
-            cat > /etc/yum.repos.d/CentOS-Base.repo << 'EOF'
-[base]
-name=CentOS-$releasever - Base
-baseurl=http://vault.centos.org/centos/$releasever/os/$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
-
-[updates]
-name=CentOS-$releasever - Updates
-baseurl=http://vault.centos.org/centos/$releasever/updates/$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
-
-[extras]
-name=CentOS-$releasever - Extras
-baseurl=http://vault.centos.org/centos/$releasever/extras/$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
-EOF
-            
-            # 清理并更新缓存
-            yum clean all && yum makecache fast
+            configure_centos7_repo
         fi
         
         # 安装基本工具
