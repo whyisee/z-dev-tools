@@ -76,51 +76,69 @@ EOF
 install_gcc() {
     print_info "安装和配置 GCC..."
     
-    if [ "$OS_TYPE" = "rhel" ]; then
-        if [ "$OS_VERSION" = "7" ]; then
-            # 直接安装必要的编译工具包
-            yum -y install gcc gcc-c++ make autoconf automake libtool pkgconfig
-            
-            # 如果安装失败，尝试更新 yum 缓存后重试
-            if [ $? -ne 0 ]; then
-                print_warning "GCC 安装失败，尝试更新缓存后重新安装..."
-                yum clean all
-                yum makecache
+    # 先检查 gcc 是否已安装
+    if command -v gcc &>/dev/null; then
+        print_info "检测到已安装的 GCC："
+        gcc --version | head -n1
+    else
+        # 如果没有安装，则进行安装
+        if [ "$OS_TYPE" = "rhel" ]; then
+            if [ "$OS_VERSION" = "7" ]; then
+                # 直接安装必要的编译工具包
                 yum -y install gcc gcc-c++ make autoconf automake libtool pkgconfig
+                
+                # 如果安装失败，尝试更新 yum 缓存后重试
+                if [ $? -ne 0 ]; then
+                    print_warning "GCC 安装失败，尝试更新缓存后重新安装..."
+                    yum clean all
+                    yum makecache
+                    yum -y install gcc gcc-c++ make autoconf automake libtool pkgconfig
+                fi
+                
+            elif [ "$OS_VERSION" -ge 8 ]; then
+                # CentOS 8+ 直接安装 gcc
+                dnf -y install gcc gcc-c++
             fi
-            
-        elif [ "$OS_VERSION" -ge 8 ]; then
-            # CentOS 8+ 直接安装 gcc
-            dnf -y install gcc gcc-c++
+        elif [ "$OS_TYPE" = "debian" ]; then
+            # Debian/Ubuntu 系统
+            apt-get update
+            apt-get -y install gcc g++ build-essential
         fi
-    elif [ "$OS_TYPE" = "debian" ]; then
-        # Debian/Ubuntu 系统
-        apt-get update
-        apt-get -y install gcc g++ build-essential
-    fi
-    
-    # 验证 GCC 安装
-    if ! command -v gcc &>/dev/null; then
-        print_error "GCC 安装失败"
-        # 显示详细错误信息
-        print_error "yum 安装日志："
-        tail -n 20 /var/log/yum.log
-        exit 1
-    fi
-    
-    # 确保 cc 链接存在
-    if ! command -v cc &>/dev/null; then
-        if [ -f /usr/bin/gcc ]; then
-            ln -sf /usr/bin/gcc /usr/bin/cc
-        else
-            print_error "找不到 gcc，无法创建 cc 链接"
+        
+        # 验证安装结果
+        if ! command -v gcc &>/dev/null; then
+            print_error "GCC 安装失败"
             exit 1
         fi
     fi
     
-    # 显示 GCC 版本
-    print_info "已安装的 GCC 版本："
-    gcc --version | head -n1
+    # 检查并创建 cc 链接
+    if ! command -v cc &>/dev/null; then
+        print_info "创建 cc 链接..."
+        # 获取 gcc 实际路径
+        GCC_PATH=$(which gcc)
+        if [ -n "$GCC_PATH" ]; then
+            ln -sf "$GCC_PATH" /usr/bin/cc
+            if [ $? -ne 0 ]; then
+                print_error "创建 cc 链接失败，请检查权限"
+                exit 1
+            fi
+        else
+            print_error "无法获取 gcc 路径"
+            exit 1
+        fi
+    else
+        print_info "cc 命令已存在"
+    fi
+    
+    # 最终验证
+    if command -v cc &>/dev/null; then
+        print_info "GCC 环境配置完成"
+        cc --version | head -n1
+    else
+        print_error "GCC 环境配置失败"
+        exit 1
+    fi
 }
 
 # 检查基础工具
