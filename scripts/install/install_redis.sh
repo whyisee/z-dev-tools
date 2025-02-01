@@ -43,7 +43,35 @@ check_base_tools() {
         if [ "$OS_VERSION" = "7" ]; then
             # 配置 CentOS 7 仓库
             yum -y install epel-release
-            yum -y install centos-release-scl
+            
+            # 配置备用源
+            cat > /etc/yum.repos.d/CentOS-Base.repo << 'EOF'
+[base]
+name=CentOS-$releasever - Base
+baseurl=http://vault.centos.org/centos/$releasever/os/$basearch/
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+
+[updates]
+name=CentOS-$releasever - Updates
+baseurl=http://vault.centos.org/centos/$releasever/updates/$basearch/
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+
+[extras]
+name=CentOS-$releasever - Extras
+baseurl=http://vault.centos.org/centos/$releasever/extras/$basearch/
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+EOF
+            
+            # 清理并更新缓存
+            yum clean all && yum makecache fast
+            
+            # 直接安装开发工具，不使用 SCL
+            yum -y groupinstall "Development Tools"
+            yum -y install wget curl tar gcc gcc-c++ make tcl
+            
         # 检查是否为 CentOS 8 或更高版本
         elif [ -f /etc/centos-release ] && [ "$OS_VERSION" -ge 8 ]; then
             # 配置 CentOS 8+ 仓库
@@ -59,13 +87,6 @@ check_base_tools() {
                 dnf config-manager --set-enabled PowerTools
             fi
         fi
-        
-        # 清理并更新缓存
-        yum clean all && yum makecache fast
-        
-        # 安装开发工具
-        yum -y groupinstall "Development Tools"
-        yum -y install wget curl tar gcc gcc-c++ make tcl
         
     elif [ "$OS_TYPE" = "debian" ]; then
         print_info "安装编译工具..."
