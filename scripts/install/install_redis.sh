@@ -37,40 +37,32 @@ install_gcc() {
     
     if [ "$OS_TYPE" = "rhel" ]; then
         if [ "$OS_VERSION" = "7" ]; then
-            # 配置 CentOS 7 的 SCL 仓库
-            cat > /etc/yum.repos.d/CentOS-SCLo-scl.repo << 'EOF'
-[centos-sclo-sclo]
-name=CentOS-7 - SCLo sclo
-baseurl=http://vault.centos.org/centos/7/sclo/$basearch/sclo/
+            # 配置 CentOS 7 的备用源
+            cat > /etc/yum.repos.d/CentOS-Base.repo << 'EOF'
+[base]
+name=CentOS-$releasever - Base
+baseurl=http://vault.centos.org/centos/$releasever/os/$basearch/
 gpgcheck=1
-enabled=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
 
-[centos-sclo-rh]
-name=CentOS-7 - SCLo rh
-baseurl=http://vault.centos.org/centos/7/sclo/$basearch/rh/
+[updates]
+name=CentOS-$releasever - Updates
+baseurl=http://vault.centos.org/centos/$releasever/updates/$basearch/
 gpgcheck=1
-enabled=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+
+[extras]
+name=CentOS-$releasever - Extras
+baseurl=http://vault.centos.org/centos/$releasever/extras/$basearch/
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
 EOF
-
+            
             # 清理并更新缓存
             yum clean all && yum makecache fast
             
-            # 安装 devtoolset
-            yum -y install centos-release-scl-rh
-            yum -y install devtoolset-7-gcc devtoolset-7-gcc-c++ devtoolset-7-binutils
-            
-            # 启用 devtoolset-7
-            cat > /etc/profile.d/gcc.sh << 'EOF'
-source /opt/rh/devtoolset-7/enable
-EOF
-            source /etc/profile.d/gcc.sh
-            
-            # 创建软链接
-            ln -sf /opt/rh/devtoolset-7/root/usr/bin/gcc /usr/bin/gcc
-            ln -sf /opt/rh/devtoolset-7/root/usr/bin/g++ /usr/bin/g++
-            ln -sf /opt/rh/devtoolset-7/root/usr/bin/gcc /usr/bin/cc
+            # 安装开发工具组
+            yum -y groupinstall "Development Tools"
             
         elif [ "$OS_VERSION" -ge 8 ]; then
             # CentOS 8+ 直接安装 gcc
@@ -88,15 +80,19 @@ EOF
         exit 1
     fi
     
+    # 确保 cc 链接存在
+    if ! command -v cc &>/dev/null; then
+        if [ -f /usr/bin/gcc ]; then
+            ln -sf /usr/bin/gcc /usr/bin/cc
+        else
+            print_error "找不到 gcc，无法创建 cc 链接"
+            exit 1
+        fi
+    fi
+    
     # 显示 GCC 版本
     print_info "已安装的 GCC 版本："
     gcc --version | head -n1
-    
-    # 验证 cc 链接
-    if ! command -v cc &>/dev/null; then
-        print_error "cc 命令不可用"
-        exit 1
-    fi
 }
 
 # 检查基础工具
