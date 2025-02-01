@@ -78,8 +78,16 @@ install_gcc() {
     
     if [ "$OS_TYPE" = "rhel" ]; then
         if [ "$OS_VERSION" = "7" ]; then
-            # 使用已配置的仓库
-            yum -y groupinstall "Development Tools"
+            # 直接安装必要的编译工具包
+            yum -y install gcc gcc-c++ make autoconf automake libtool pkgconfig
+            
+            # 如果安装失败，尝试更新 yum 缓存后重试
+            if [ $? -ne 0 ]; then
+                print_warning "GCC 安装失败，尝试更新缓存后重新安装..."
+                yum clean all
+                yum makecache
+                yum -y install gcc gcc-c++ make autoconf automake libtool pkgconfig
+            fi
             
         elif [ "$OS_VERSION" -ge 8 ]; then
             # CentOS 8+ 直接安装 gcc
@@ -94,6 +102,9 @@ install_gcc() {
     # 验证 GCC 安装
     if ! command -v gcc &>/dev/null; then
         print_error "GCC 安装失败"
+        # 显示详细错误信息
+        print_error "yum 安装日志："
+        tail -n 20 /var/log/yum.log
         exit 1
     fi
     
