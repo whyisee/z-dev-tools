@@ -37,30 +37,30 @@ check_base_tools() {
     
     # 根据操作系统类型安装编译工具
     if [ "$OS_TYPE" = "rhel" ]; then
-        local required_tools="wget curl tar gcc gcc-c++ make tcl"
-        if ! rpm -q $required_tools &>/dev/null; then
-            print_warning "缺少必要的工具，开始安装..."
-            yum -y install $required_tools
-            if [ $? -ne 0 ]; then
-                print_error "工具安装失败"
-                exit 1
-            fi
+        print_info "安装编译工具..."
+        yum clean all
+        yum -y install epel-release
+        yum -y groupinstall "Development Tools"
+        yum -y install wget curl tar gcc gcc-c++ make tcl
+        
+        # 确认 gcc 安装和链接
+        if ! alternatives --display gcc &>/dev/null; then
+            alternatives --install /usr/bin/cc cc /usr/bin/gcc 100
         fi
     elif [ "$OS_TYPE" = "debian" ]; then
-        local required_tools="wget curl tar gcc g++ make tcl"
-        if ! dpkg -l $required_tools &>/dev/null; then
-            print_warning "缺少必要的工具，开始安装..."
-            apt-get update
-            apt-get -y install $required_tools
-            if [ $? -ne 0 ]; then
-                print_error "工具安装失败"
-                exit 1
-            fi
+        print_info "安装编译工具..."
+        apt-get update
+        apt-get -y install build-essential
+        apt-get -y install wget curl tar gcc g++ make tcl
+        
+        # 确认 gcc 链接
+        if [ ! -f /usr/bin/cc ]; then
+            ln -s /usr/bin/gcc /usr/bin/cc
         fi
     fi
     
     # 验证工具是否安装成功
-    local tools_to_check="wget curl tar gcc make"
+    local tools_to_check="wget curl tar gcc cc make"
     for tool in $tools_to_check; do
         if ! command -v $tool &>/dev/null; then
             print_error "工具 $tool 安装失败"
@@ -68,6 +68,8 @@ check_base_tools() {
         fi
     done
     
+    # 显示 gcc 版本
+    gcc --version
     print_info "基础工具检查完成"
 }
 
