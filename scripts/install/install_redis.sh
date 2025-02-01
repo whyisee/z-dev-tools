@@ -39,8 +39,13 @@ check_base_tools() {
     if [ "$OS_TYPE" = "rhel" ]; then
         print_info "安装编译工具..."
         
+        # 检查是否为 CentOS 7
+        if [ "$OS_VERSION" = "7" ]; then
+            # 配置 CentOS 7 仓库
+            yum -y install epel-release
+            yum -y install centos-release-scl
         # 检查是否为 CentOS 8 或更高版本
-        if [ -f /etc/centos-release ] && [ "$OS_VERSION" -ge 8 ]; then
+        elif [ -f /etc/centos-release ] && [ "$OS_VERSION" -ge 8 ]; then
             # 配置 CentOS 8+ 仓库
             sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
             sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
@@ -53,33 +58,20 @@ check_base_tools() {
                 dnf -y install epel-release
                 dnf config-manager --set-enabled PowerTools
             fi
-        else
-            # CentOS 7 或其他 RHEL 系统
-            yum -y install epel-release
         fi
         
         # 清理并更新缓存
-        yum clean all
-        yum makecache
+        yum clean all && yum makecache fast
         
         # 安装开发工具
         yum -y groupinstall "Development Tools"
         yum -y install wget curl tar gcc gcc-c++ make tcl
         
-        # 确认 gcc 安装和链接
-        if [ ! -f /usr/bin/cc ]; then
-            ln -s /usr/bin/gcc /usr/bin/cc
-        fi
     elif [ "$OS_TYPE" = "debian" ]; then
         print_info "安装编译工具..."
         apt-get update
         apt-get -y install build-essential
         apt-get -y install wget curl tar gcc g++ make tcl
-        
-        # 确认 gcc 链接
-        if [ ! -f /usr/bin/cc ]; then
-            ln -s /usr/bin/gcc /usr/bin/cc
-        fi
     fi
     
     # 验证工具是否安装成功
@@ -91,14 +83,21 @@ check_base_tools() {
         fi
     done
     
-    # 确保 cc 可用
-    if [ ! -f /usr/bin/cc ]; then
-        print_warning "创建 cc 链接..."
-        ln -s /usr/bin/gcc /usr/bin/cc
+    # 检查 cc 是否可用
+    if ! command -v cc &>/dev/null; then
+        print_warning "cc 命令不可用，尝试创建链接..."
+        if [ -f /usr/bin/gcc ]; then
+            ln -sf /usr/bin/gcc /usr/bin/cc
+        else
+            print_error "找不到 gcc，无法创建 cc 链接"
+            exit 1
+        fi
     fi
     
-    # 显示 gcc 版本
-    gcc --version
+    # 显示编译器版本
+    print_info "GCC 版本信息："
+    gcc --version | head -n1
+    
     print_info "基础工具检查完成"
 }
 
